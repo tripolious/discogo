@@ -25,8 +25,23 @@ func main() {
 	ctx, cancelFunc, cancelChan := CreateLaunchContext()
 	defer cancelFunc()
 
-	var handlers = []interface{}{messageCreate}
-	go discogo.Start(ctx, &wg, handlers, *token)
+	log.Println("starting discord bot")
+	err := discogo.Boot(ctx, &wg, *token)
+	if err != nil {
+		log.Fatalf("booting failed %s", err)
+	}
+
+	log.Println("add handlers so the bot can handle messages")
+	var handlers = []interface{}{
+		messageCreate,
+		func(s *discordgo.Session, r *discordgo.Ready) { log.Println("discord bot is up and running") },
+	}
+	err = discogo.AddHandlers(handlers)
+	if err != nil {
+		log.Printf("unable to add handlers: %s", err)
+	}
+
+	log.Printf("bot booted and can consume handlers and send messages")
 
 	select {
 	case <-cancelChan:
@@ -36,21 +51,26 @@ func main() {
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// we skip messages the bot did
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
+	// we only want to consume messages from the defined channel
 	if m.Message.ChannelID != *channel {
 		return
 	}
 
+	// example of how we can just write stuff to the channel
 	_, err := s.ChannelMessageSend(*channel, "okokkok")
 	if err != nil {
 		log.Printf("cant write message %s with error %s", m.Content, err)
 	}
 
+	// this is the message we consumed
 	log.Printf("%+v", m.Content)
 
+	// example of how we can respond to the message
 	_, err = s.ChannelMessageSendReply(*channel, "yo", m.Reference())
 	if err != nil {
 		log.Printf("cant reply to Message %s with error %s", m.Content, err)
